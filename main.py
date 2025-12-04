@@ -18,32 +18,40 @@ laps["LapTimeSeconds"] = laps["LapTime"].dt.total_seconds()
 # Lap times in seconds
 laps['LapTimeSeconds'] = laps['LapTime'].dt.total_seconds()
 
-print(laps.columns)
+# print(laps.columns)
 
 
 # Marking the pit stop laps/spikes in the graph
 pit_in_laps = laps[laps['PitInTime'].notna()]
 pit_out_laps = laps[laps['PitOutTime'].notna()]
 
-
-
+# Unique tire compounds used
 compounds = laps['Compound'].unique()
 
-plt.figure(figsize=(10,6))
-plt.plot(laps['LapNumber'], laps['LapTimeSeconds'], marker='o')
-plt.xlabel("Lap Number")
-plt.ylabel("Lap Time (s)")
-plt.title("Verstappen Lap Times - Abu Dhabi 2024")
-plt.grid(which='both', linestyle='--', linewidth=0.5)
-for lap in pit_in_laps['LapNumber']:
-    plt.axvline(x=lap, color='r', linestyle='--', alpha=0.5)
-for lap in pit_out_laps['LapNumber']:
-    plt.axvline(x=lap, color='g', linestyle='--', alpha=0.5)
-for compound in compounds:
-    stint = laps[laps['Compound'] == compound]
-    plt.plot(stint['LapNumber'], stint['LapTimeSeconds'], 'o-', label=compound)
-plt.legend(title='Tire Compound')
-plt.show()
+features = laps[["LapNumber", "Compound", "TyreLife", "LapTimeSeconds"]]
+print(features.head())
+
+# Building the target column 
+laps["WillPitNextLap"]
+
+
+
+# Graphing lap times with pit stops and tire compounds
+# plt.figure(figsize=(10,6))
+# plt.plot(laps['LapNumber'], laps['LapTimeSeconds'], marker='o')
+# plt.xlabel("Lap Number")
+# plt.ylabel("Lap Time (s)")
+# plt.title("Verstappen Lap Times - Abu Dhabi 2024")
+# plt.grid(which='both', linestyle='--', linewidth=0.5)
+# for lap in pit_in_laps['LapNumber']:
+#     plt.axvline(x=lap, color='r', linestyle='--', alpha=0.5)
+# for lap in pit_out_laps['LapNumber']:
+#     plt.axvline(x=lap, color='g', linestyle='--', alpha=0.5)
+# for compound in compounds:
+#     stint = laps[laps['Compound'] == compound]
+#     plt.plot(stint['LapNumber'], stint['LapTimeSeconds'], 'o-', label=compound)
+# plt.legend(title='Tire Compound')
+# plt.show()
 
 
 
