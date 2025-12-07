@@ -2,6 +2,10 @@ import fastf1
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import Normalizer
+from sklearn.compose import ColumnTransformer
 
 
 print(fastf1.__version__)
@@ -30,9 +34,23 @@ compounds = laps['Compound'].unique()
 
 features = laps[["LapNumber", "Compound", "TyreLife", "LapTimeSeconds"]]
 print(features.head())
+labels = laps['LapTimeSeconds']
 
-# Building the target column 
-laps["WillPitNextLap"]
+# One-hot encoding - converting cetegorical features into numerical format
+features = pd.get_dummies(features, columns=["Compound"])
+
+# Splitting the data into training and testing sets
+features_train, features_test, labels_train, labels_test = train_test_split(
+    features, labels, test_size=0.2, random_state=42)
+
+# Standardizing the features
+ct = ColumnTransformer([
+    ('scale', StandardScaler(), ["LapNumber", "TyreLife"])
+], remainder='passthrough')
+
+features_train = ct.fit_transform(features_train)
+features_test = ct.transform(features_test)
+
 
 
 
