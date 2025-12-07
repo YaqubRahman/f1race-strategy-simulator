@@ -16,6 +16,9 @@ session.load()
 
 laps = session.laps.pick_driver('VER') 
 print(laps.head())
+print("+-----------------------+")
+print(laps.columns)
+
 
 laps["LapTimeSeconds"] = laps["LapTime"].dt.total_seconds()
 
@@ -32,12 +35,12 @@ pit_out_laps = laps[laps['PitOutTime'].notna()]
 # Unique tire compounds used
 compounds = laps['Compound'].unique()
 
-features = laps[["LapNumber", "Compound", "TyreLife", "LapTimeSeconds"]]
+features = laps[["LapNumber", "Stint", "Compound", "TyreLife", "FreshTyre", "Sector1Time", "Sector2Time", "Sector3Time", "SpeedFL", "TrackStatus"]]
 print(features.head())
 labels = laps['LapTimeSeconds']
 
 # One-hot encoding - converting cetegorical features into numerical format
-features = pd.get_dummies(features, columns=["Compound"])
+features = pd.get_dummies(features, columns=["Compound", "TrackStatus"])
 
 # Splitting the data into training and testing sets
 features_train, features_test, labels_train, labels_test = train_test_split(
@@ -45,7 +48,7 @@ features_train, features_test, labels_train, labels_test = train_test_split(
 
 # Standardizing the features
 ct = ColumnTransformer([
-    ('scale', StandardScaler(), ["LapNumber", "TyreLife"])
+    ('scale', StandardScaler(), ["LapNumber", "TyreLife", "Sector1Time", "Sector2Time", "Sector3Time", "SpeedFL"])
 ], remainder='passthrough')
 
 features_train = ct.fit_transform(features_train)
