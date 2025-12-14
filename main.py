@@ -9,49 +9,61 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import RandomForestRegressor
 
+# Some gibberish i move here temporarily
+
+# print(laps.head())
+# print("+-----------------------+")
+# print(laps.columns)
 
 print(fastf1.__version__)
-fastf1.Cache.enable_cache('cache')  
-session = fastf1.get_session(2024, 'Abu Dhabi', 'R') 
-session.load()
+fastf1.Cache.enable_cache('cache')
 
+driver = 'VER' 
+track = 'Silverstone'
+years = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+all_laps = []
 
-laps = session.laps.pick_driver('VER') 
-print(laps.head())
-print("+-----------------------+")
-print(laps.columns)
+for year in years:
+    try:
+        session = fastf1.get_session(year, track, 'R')  
+        session.load()
+        laps = session.laps.pick_drivers([driver])
 
+        # Lap times in seconds
+        laps['LapTimeSeconds'] = laps['LapTime'].dt.total_seconds()
 
-laps["LapTimeSeconds"] = laps["LapTime"].dt.total_seconds()
+        laps_clean = laps[(laps['LapTimeSeconds'].notna()) & 
+                          (laps['SpeedFL'].notna()) & 
+                          (laps['PitInTime'].isna()) & 
+                          (laps['Deleted'] != True) & 
+                          (laps['IsAccurate'] == True)]
 
-# Lap times in seconds
-laps['LapTimeSeconds'] = laps['LapTime'].dt.total_seconds()
+        # Sector times in seconds
+        laps['Sector1Seconds'] = laps['Sector1Time'].dt.total_seconds()
+        laps['Sector2Seconds'] = laps['Sector2Time'].dt.total_seconds()
+        laps['Sector3Seconds'] = laps['Sector3Time'].dt.total_seconds()
 
-# Sector times in seconds
-laps['Sector1Seconds'] = laps['Sector1Time'].dt.total_seconds()
-laps['Sector2Seconds'] = laps['Sector2Time'].dt.total_seconds()
-laps['Sector3Seconds'] = laps['Sector3Time'].dt.total_seconds()
+        laps_clean['Year'] = year
 
+        all_laps.append(laps_clean)
 
-# Drop rows with any NaN in features or labels
-laps_clean = laps.dropna(subset=[
-    "LapTimeSeconds", "SpeedFL"
-])
+    except Exception as e:
+        print(f"Could not load data for {year} {track}: {e}")
+        continue
 
-laps_clean = laps[
-    (laps['LapTimeSeconds'].notna()) &
-    (laps['SpeedFL'].notna()) &
-    (laps['PitInTime'].isna()) &
-    (laps['Deleted'] != True) &
-    (laps['IsAccurate'] == True)
-]
+# Combine all years into one DataFrame
+multi_year_laps = pd.concat(all_laps, ignore_index=True)
+
+print(multi_year_laps.head())
+print("Total laps collected:", len(multi_year_laps))
+
 
 
 # Selecting relevant features and the target variable
-features = laps_clean[["LapNumber", "Stint", "Compound", "TyreLife", "FreshTyre", "SpeedFL", "TrackStatus"]]
+features = multi_year_laps[["LapNumber", "Stint", "Compound", "TyreLife", "FreshTyre", "SpeedFL", "TrackStatus"]]
 print(features.head())
 
-labels = laps_clean["LapTimeSeconds"]
+labels = multi_year_laps["LapTimeSeconds"]
 
 # One-hot encoding - converting categorical features into numerical format
 features = pd.get_dummies(features, columns=["Compound", "TrackStatus"])
