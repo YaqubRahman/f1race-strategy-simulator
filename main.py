@@ -9,11 +9,6 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import RandomForestRegressor
 
-# Some gibberish i move here temporarily
-
-# print(laps.head())
-# print("+-----------------------+")
-# print(laps.columns)
 
 print(fastf1.__version__)
 fastf1.Cache.enable_cache('cache')
@@ -92,6 +87,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 preds = reg.predict(features_test)
 print("MAE:", mean_absolute_error(labels_test, preds))
 print("MSE:", mean_squared_error(labels_test, preds))
+print("AHHHHHHHHHHHHHHHH", preds)
 
 plt.scatter(labels_test, labels_test - preds, alpha=0.5)
 plt.axhline(0, color='red', linestyle='--')
@@ -101,7 +97,7 @@ plt.title("Residuals vs Actual Lap Time")
 plt.show()
 
 
-
+# TESTING ACCOUNT GITHUB
 
 
 # Marking the pit stop laps/spikes in the graph
