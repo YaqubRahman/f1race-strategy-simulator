@@ -32,6 +32,7 @@ for year in years:
         laps = session.laps.pick_drivers([driver])
 
         # Lap times in seconds
+        laps = laps.copy()  # Avoid SettingWithCopyWarning
         laps['LapTimeSeconds'] = laps['LapTime'].dt.total_seconds()
 
         laps_clean = laps[(laps['LapTimeSeconds'].notna()) & 
@@ -39,6 +40,8 @@ for year in years:
                           (laps['PitInTime'].isna()) & 
                           (laps['Deleted'] != True) & 
                           (laps['IsAccurate'] == True)]
+        laps_delta_calc = laps_clean.groupby('Stint')['LapTimeSeconds'].diff()
+        laps_clean['LapDelta'] = laps_delta_calc.fillna(0)  # Fill NaN values (first lap of each stint) with
 
         # Sector times in seconds
         laps['Sector1Seconds'] = laps['Sector1Time'].dt.total_seconds()
@@ -55,6 +58,13 @@ for year in years:
 
 # Combine all years into one DataFrame
 multi_year_laps = pd.concat(all_laps, ignore_index=True)
+avg_delta_soft = multi_year_laps[multi_year_laps['Compound'] == 'SOFT']['LapDelta'].mean()
+avg_delta_medium = multi_year_laps[multi_year_laps['Compound'] == 'MEDIUM']['LapDelta'].mean()
+avg_delta_hard = multi_year_laps[multi_year_laps['Compound'] == 'HARD']['LapDelta'].mean()
+
+print(f"Average lap delta for SOFT tires: {avg_delta_soft}")
+print(f"Average lap delta for MEDIUM tires: {avg_delta_medium}")
+print(f"Average lap delta for HARD tires: {avg_delta_hard}")
 
 print(multi_year_laps.head())
 print("Total laps collected:", len(multi_year_laps))
@@ -62,7 +72,7 @@ print("Total laps collected:", len(multi_year_laps))
 
 
 # Selecting relevant features and the target variable
-features = multi_year_laps[["LapNumber", "Stint", "Compound", "TyreLife", "FreshTyre", "SpeedFL", "TrackStatus"]]
+features = multi_year_laps[["LapNumber", "Stint", "Compound", "TyreLife", "FreshTyre", "SpeedFL", "TrackStatus", "LapDelta"]]
 print(features.head())
 
 labels = multi_year_laps["LapTimeSeconds"]
@@ -94,7 +104,6 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 preds = reg.predict(features_test)
 print("MAE:", mean_absolute_error(labels_test, preds))
 print("MSE:", mean_squared_error(labels_test, preds))
-print("AHHHHHHHHHHHHHHHH", preds)
 print(multi_year_laps["TrackStatus"].value_counts())
 
 # plt.scatter(labels_test, labels_test - preds, alpha=0.5)
@@ -115,7 +124,8 @@ data_compound1 = {
     "TyreLife": list(range(1, total_laps + 1)),
     "FreshTyre": [True] + [False] * (total_laps - 1),
     "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
-    "TrackStatus": [1] * total_laps
+    "TrackStatus": [1] * total_laps,
+    "LapDelta": [avg_delta_soft] * total_laps
 }
 
 data_compound2 = {
@@ -125,7 +135,8 @@ data_compound2 = {
     "TyreLife": list(range(1, total_laps + 1)),
     "FreshTyre": [True] + [False] * (total_laps - 1),
     "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
-    "TrackStatus": [1] * total_laps
+    "TrackStatus": [1] * total_laps,
+    "LapDelta": [avg_delta_medium] * total_laps
 }
 
 data_compound3 = {
@@ -135,7 +146,8 @@ data_compound3 = {
     "TyreLife": list(range(1, total_laps + 1)),
     "FreshTyre": [True] + [False] * (total_laps - 1),
     "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
-    "TrackStatus": [1] * total_laps
+    "TrackStatus": [1] * total_laps,
+    "LapDelta": [avg_delta_hard] * total_laps
 }
 
 # Create DataFrames for each compound
