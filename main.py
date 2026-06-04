@@ -88,19 +88,81 @@ preds = reg.predict(features_test)
 print("MAE:", mean_absolute_error(labels_test, preds))
 print("MSE:", mean_squared_error(labels_test, preds))
 print("AHHHHHHHHHHHHHHHH", preds)
+print(multi_year_laps["TrackStatus"].value_counts())
 
-plt.scatter(labels_test, labels_test - preds, alpha=0.5)
-plt.axhline(0, color='red', linestyle='--')
-plt.xlabel("Actual Lap Time (s)")
-plt.ylabel("Residual (Actual - Predicted)")
-plt.title("Residuals vs Actual Lap Time")
-plt.show()
+# plt.scatter(labels_test, labels_test - preds, alpha=0.5)
+# plt.axhline(0, color='red', linestyle='--')
+# plt.xlabel("Actual Lap Time (s)")
+# plt.ylabel("Residual (Actual - Predicted)")
+# plt.title("Residuals vs Actual Lap Time")
+# plt.show()
 
 
-# TESTING ACCOUNT GITHUB
-# ANOTHER TEST
-# Another test
-# Final test
+
+total_laps = int(session.laps['LapNumber'].max())
+
+data_compound1 = {
+    "LapNumber": list(range(0, total_laps)),
+    "Stint": 1,
+    "Compound": ["SOFT"] * total_laps,
+    "TyreLife": list(range(1, total_laps + 1)),
+    "FreshTyre": [True] + [False] * (total_laps - 1),
+    "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
+    "TrackStatus": [1] * total_laps
+}
+
+data_compound2 = {
+    "LapNumber": list(range(0, total_laps)),
+    "Stint": 1,
+    "Compound": ["MEDIUM"] * total_laps,
+    "TyreLife": list(range(1, total_laps + 1)),
+    "FreshTyre": [True] + [False] * (total_laps - 1),
+    "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
+    "TrackStatus": [1] * total_laps
+}
+
+data_compound3 = {
+    "LapNumber": list(range(0, total_laps)),
+    "Stint": 1,
+    "Compound": ["HARD"] * total_laps,
+    "TyreLife": list(range(1, total_laps + 1)),
+    "FreshTyre": [True] + [False] * (total_laps - 1),
+    "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
+    "TrackStatus": [1] * total_laps
+}
+
+
+# Create DataFrames for each compound
+compound1_df = pd.DataFrame(data_compound1)
+compound2_df = pd.DataFrame(data_compound2)
+compound3_df = pd.DataFrame(data_compound3)
+
+# One-hot encoding for the new DataFrames
+compound1_df = pd.get_dummies(compound1_df, columns=["Compound", "TrackStatus"])
+compound2_df = pd.get_dummies(compound2_df, columns=["Compound", "TrackStatus"])
+compound3_df = pd.get_dummies(compound3_df, columns=["Compound", "TrackStatus"])
+
+# Reindex the new DataFrames to ensure they have the same columns as the training features, filling missing columns with zeros
+# (MEDIUM and HARD will have 0s in the SOFT columns, etc.)
+compound1_df = compound1_df.reindex(columns=features.columns, fill_value=0)
+compound2_df = compound2_df.reindex(columns=features.columns, fill_value=0)
+compound3_df = compound3_df.reindex(columns=features.columns, fill_value=0)
+
+
+stint1_time = reg.predict(compound1_df)
+stint1_total_time = stint1_time.sum()
+print("Stint 1 Total Time (SOFT):", stint1_total_time)
+stint2_time = reg.predict(compound2_df)
+stint2_total_time = stint2_time.sum()
+print("Stint 2 Total Time (MEDIUM):", stint2_total_time)
+stint3_time = reg.predict(compound3_df)
+stint3_total_time = stint3_time.sum()
+print("Stint 3 Total Time (HARD):", stint3_total_time)
+pit_stop_constant = 23.0
+
+total_time = stint1_total_time + stint2_total_time + pit_stop_constant
+
+
 
 # Marking the pit stop laps/spikes in the graph
 #pit_in_laps = laps[laps['PitInTime'].notna()]
