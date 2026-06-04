@@ -8,6 +8,13 @@ from sklearn.preprocessing import Normalizer
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.ensemble import RandomForestRegressor
+from itertools import permutations
+
+
+def convert(seconds):
+    minutes = int(seconds // 60)
+    remaining_seconds = seconds % 60
+    return f"{minutes}mins:{remaining_seconds:.3f}s"
 
 
 print(fastf1.__version__)
@@ -131,7 +138,6 @@ data_compound3 = {
     "TrackStatus": [1] * total_laps
 }
 
-
 # Create DataFrames for each compound
 compound1_df = pd.DataFrame(data_compound1)
 compound2_df = pd.DataFrame(data_compound2)
@@ -148,6 +154,13 @@ compound1_df = compound1_df.reindex(columns=features.columns, fill_value=0)
 compound2_df = compound2_df.reindex(columns=features.columns, fill_value=0)
 compound3_df = compound3_df.reindex(columns=features.columns, fill_value=0)
 
+compounds = [
+    ("SOFT", compound1_df),
+    ("MEDIUM", compound2_df),
+    ("HARD", compound3_df)
+]
+
+
 
 stint1_time = reg.predict(compound1_df)
 stint1_total_time = stint1_time.sum()
@@ -160,33 +173,30 @@ stint3_total_time = stint3_time.sum()
 print("Stint 3 Total Time (HARD):", stint3_total_time)
 pit_stop_constant = 23.0
 
-total_time = stint1_total_time + stint2_total_time + pit_stop_constant
 
+best_strategy = 0
+best_time = float('inf')
+best_compound1 = None
+best_compound2 = None
 
+# F1 Teams never pit before lap 10 at the earliest
+for (name1, compound1_df), (name2, compound2_df) in permutations(compounds, 2):
+    for pit_lap in range(10, total_laps - 10):
+        stint1_time = reg.predict(compound1_df.iloc[:pit_lap])
+        stint2_time = reg.predict(compound2_df.iloc[pit_lap:])
 
-# Marking the pit stop laps/spikes in the graph
-#pit_in_laps = laps[laps['PitInTime'].notna()]
-#pit_out_laps = laps[laps['PitOutTime'].notna()]
+        stint1_total_time = stint1_time.sum()
+        stint2_total_time = stint2_time.sum()
+        total_time = stint1_total_time + stint2_total_time + pit_stop_constant
 
-# Unique tire compounds used
-#compounds = laps['Compound'].unique()
+        if total_time < best_time:
+            best_time = total_time
+            best_strategy = pit_lap
+            best_compound1 = name1
+            best_compound2 = name2
 
-# Graphing lap times with pit stops and tire compounds
-# plt.figure(figsize=(10,6))
-# plt.plot(laps['LapNumber'], laps['LapTimeSeconds'], marker='o')
-# plt.xlabel("Lap Number")
-# plt.ylabel("Lap Time (s)")
-# plt.title("Verstappen Lap Times - Abu Dhabi 2024")
-# plt.grid(which='both', linestyle='--', linewidth=0.5)
-# for lap in pit_in_laps['LapNumber']:
-#     plt.axvline(x=lap, color='r', linestyle='--', alpha=0.5)
-# for lap in pit_out_laps['LapNumber']:
-#     plt.axvline(x=lap, color='g', linestyle='--', alpha=0.5)
-# for compound in compounds:
-#     stint = laps[laps['Compound'] == compound]
-#     plt.plot(stint['LapNumber'], stint['LapTimeSeconds'], 'o-', label=compound)
-# plt.legend(title='Tire Compound')
-# plt.show()
+print(f"Best strategy: Pit on lap {best_strategy}, {best_compound1} → {best_compound2}")
+print(f"Predicted total race time: {convert(best_time)}")
 
 
 
