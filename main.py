@@ -16,199 +16,206 @@ def convert(seconds):
     remaining_seconds = seconds % 60
     return f"{minutes}mins:{remaining_seconds:.3f}s"
 
+def train_model(driver, track, years):
+    print(fastf1.__version__)
+    fastf1.Cache.enable_cache('cache')
 
-print(fastf1.__version__)
-fastf1.Cache.enable_cache('cache')
+    # driver = 'VER' 
+    # track = 'Silverstone'
+    # years = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+    all_laps = []
 
-driver = 'VER' 
-track = 'Silverstone'
-years = [2018, 2019, 2020, 2021, 2022, 2023, 2024]
-all_laps = []
+    for year in years:
+        try:
+            session = fastf1.get_session(year, track, 'R')  
+            session.load()
+            laps = session.laps.pick_drivers([driver])
 
-for year in years:
-    try:
-        session = fastf1.get_session(year, track, 'R')  
-        session.load()
-        laps = session.laps.pick_drivers([driver])
+            # Lap times in seconds
+            laps = laps.copy()  # Avoid SettingWithCopyWarning
+            laps['LapTimeSeconds'] = laps['LapTime'].dt.total_seconds()
 
-        # Lap times in seconds
-        laps = laps.copy()  # Avoid SettingWithCopyWarning
-        laps['LapTimeSeconds'] = laps['LapTime'].dt.total_seconds()
+            laps_clean = laps[(laps['LapTimeSeconds'].notna()) & 
+                            (laps['SpeedFL'].notna()) & 
+                            (laps['PitInTime'].isna()) & 
+                            (laps['Deleted'] != True) & 
+                            (laps['IsAccurate'] == True)]
+            laps_delta_calc = laps_clean.groupby('Stint')['LapTimeSeconds'].diff()
+            laps_clean['LapDelta'] = laps_delta_calc.fillna(0)  # Fill NaN values (first lap of each stint) with
 
-        laps_clean = laps[(laps['LapTimeSeconds'].notna()) & 
-                          (laps['SpeedFL'].notna()) & 
-                          (laps['PitInTime'].isna()) & 
-                          (laps['Deleted'] != True) & 
-                          (laps['IsAccurate'] == True)]
-        laps_delta_calc = laps_clean.groupby('Stint')['LapTimeSeconds'].diff()
-        laps_clean['LapDelta'] = laps_delta_calc.fillna(0)  # Fill NaN values (first lap of each stint) with
+            # Sector times in seconds
+            laps['Sector1Seconds'] = laps['Sector1Time'].dt.total_seconds()
+            laps['Sector2Seconds'] = laps['Sector2Time'].dt.total_seconds()
+            laps['Sector3Seconds'] = laps['Sector3Time'].dt.total_seconds()
 
-        # Sector times in seconds
-        laps['Sector1Seconds'] = laps['Sector1Time'].dt.total_seconds()
-        laps['Sector2Seconds'] = laps['Sector2Time'].dt.total_seconds()
-        laps['Sector3Seconds'] = laps['Sector3Time'].dt.total_seconds()
+            laps_clean['Year'] = year
 
-        laps_clean['Year'] = year
+            all_laps.append(laps_clean)
 
-        all_laps.append(laps_clean)
+        except Exception as e:
+            print(f"Could not load data for {year} {track}: {e}")
+            continue
 
-    except Exception as e:
-        print(f"Could not load data for {year} {track}: {e}")
-        continue
+    # Combine all years into one DataFrame
+    multi_year_laps = pd.concat(all_laps, ignore_index=True)
+    avg_delta_soft = multi_year_laps[multi_year_laps['Compound'] == 'SOFT']['LapDelta'].mean()
+    avg_delta_medium = multi_year_laps[multi_year_laps['Compound'] == 'MEDIUM']['LapDelta'].mean()
+    avg_delta_hard = multi_year_laps[multi_year_laps['Compound'] == 'HARD']['LapDelta'].mean()
 
-# Combine all years into one DataFrame
-multi_year_laps = pd.concat(all_laps, ignore_index=True)
-avg_delta_soft = multi_year_laps[multi_year_laps['Compound'] == 'SOFT']['LapDelta'].mean()
-avg_delta_medium = multi_year_laps[multi_year_laps['Compound'] == 'MEDIUM']['LapDelta'].mean()
-avg_delta_hard = multi_year_laps[multi_year_laps['Compound'] == 'HARD']['LapDelta'].mean()
+    print(f"Average lap delta for SOFT tires: {avg_delta_soft}")
+    print(f"Average lap delta for MEDIUM tires: {avg_delta_medium}")
+    print(f"Average lap delta for HARD tires: {avg_delta_hard}")
 
-print(f"Average lap delta for SOFT tires: {avg_delta_soft}")
-print(f"Average lap delta for MEDIUM tires: {avg_delta_medium}")
-print(f"Average lap delta for HARD tires: {avg_delta_hard}")
-
-print(multi_year_laps.head())
-print("Total laps collected:", len(multi_year_laps))
-
-
-
-# Selecting relevant features and the target variable
-features = multi_year_laps[["LapNumber", "Stint", "Compound", "TyreLife", "FreshTyre", "SpeedFL", "TrackStatus", "LapDelta"]]
-print(features.head())
-
-labels = multi_year_laps["LapTimeSeconds"]
-
-# One-hot encoding - converting categorical features into numerical format
-features = pd.get_dummies(features, columns=["Compound", "TrackStatus"])
-
-# Imputing missing values if any
-# imputer = SimpleImputer(strategy='mean')
-# features_imputed = imputer.fit_transform(features)
-
-# Splitting the data into training and testing sets
-features_train, features_test, labels_train, labels_test = train_test_split(
-    features, labels, test_size=0.2, random_state=42)
-
-# # Standardizing the features
-# ct = ColumnTransformer([
-#     ('scale', StandardScaler(), ["LapNumber", "TyreLife", "SpeedFL"])
-# ], remainder='passthrough')
-
-# features_train = ct.fit_transform(features_train)
-# features_test = ct.transform(features_test)
-
-reg = RandomForestRegressor(n_estimators=100, random_state=42)
-reg.fit(features_train, labels_train)
-print("R^2 score:", reg.score(features_test, labels_test))
-
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-preds = reg.predict(features_test)
-print("MAE:", mean_absolute_error(labels_test, preds))
-print("MSE:", mean_squared_error(labels_test, preds))
-print(multi_year_laps["TrackStatus"].value_counts())
-
-# plt.scatter(labels_test, labels_test - preds, alpha=0.5)
-# plt.axhline(0, color='red', linestyle='--')
-# plt.xlabel("Actual Lap Time (s)")
-# plt.ylabel("Residual (Actual - Predicted)")
-# plt.title("Residuals vs Actual Lap Time")
-# plt.show()
+    print(multi_year_laps.head())
+    print("Total laps collected:", len(multi_year_laps))
 
 
 
-total_laps = int(session.laps['LapNumber'].max())
+    # Selecting relevant features and the target variable
+    features = multi_year_laps[["LapNumber", "Stint", "Compound", "TyreLife", "FreshTyre", "SpeedFL", "TrackStatus", "LapDelta"]]
+    print(features.head())
 
-data_compound1 = {
-    "LapNumber": list(range(0, total_laps)),
-    "Stint": 1,
-    "Compound": ["SOFT"] * total_laps,
-    "TyreLife": list(range(1, total_laps + 1)),
-    "FreshTyre": [True] + [False] * (total_laps - 1),
-    "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
-    "TrackStatus": [1] * total_laps,
-    "LapDelta": [avg_delta_soft] * total_laps
-}
+    labels = multi_year_laps["LapTimeSeconds"]
 
-data_compound2 = {
-    "LapNumber": list(range(0, total_laps)),
-    "Stint": 1,
-    "Compound": ["MEDIUM"] * total_laps,
-    "TyreLife": list(range(1, total_laps + 1)),
-    "FreshTyre": [True] + [False] * (total_laps - 1),
-    "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
-    "TrackStatus": [1] * total_laps,
-    "LapDelta": [avg_delta_medium] * total_laps
-}
+    # One-hot encoding - converting categorical features into numerical format
+    features = pd.get_dummies(features, columns=["Compound", "TrackStatus"])
 
-data_compound3 = {
-    "LapNumber": list(range(0, total_laps)),
-    "Stint": 1,
-    "Compound": ["HARD"] * total_laps,
-    "TyreLife": list(range(1, total_laps + 1)),
-    "FreshTyre": [True] + [False] * (total_laps - 1),
-    "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
-    "TrackStatus": [1] * total_laps,
-    "LapDelta": [avg_delta_hard] * total_laps
-}
+    # Imputing missing values if any
+    # imputer = SimpleImputer(strategy='mean')
+    # features_imputed = imputer.fit_transform(features)
 
-# Create DataFrames for each compound
-compound1_df = pd.DataFrame(data_compound1)
-compound2_df = pd.DataFrame(data_compound2)
-compound3_df = pd.DataFrame(data_compound3)
+    # Splitting the data into training and testing sets
+    features_train, features_test, labels_train, labels_test = train_test_split(
+        features, labels, test_size=0.2, random_state=42)
 
-# One-hot encoding for the new DataFrames
-compound1_df = pd.get_dummies(compound1_df, columns=["Compound", "TrackStatus"])
-compound2_df = pd.get_dummies(compound2_df, columns=["Compound", "TrackStatus"])
-compound3_df = pd.get_dummies(compound3_df, columns=["Compound", "TrackStatus"])
+    # # Standardizing the features
+    # ct = ColumnTransformer([
+    #     ('scale', StandardScaler(), ["LapNumber", "TyreLife", "SpeedFL"])
+    # ], remainder='passthrough')
 
-# Reindex the new DataFrames to ensure they have the same columns as the training features, filling missing columns with zeros
-# (MEDIUM and HARD will have 0s in the SOFT columns, etc.)
-compound1_df = compound1_df.reindex(columns=features.columns, fill_value=0)
-compound2_df = compound2_df.reindex(columns=features.columns, fill_value=0)
-compound3_df = compound3_df.reindex(columns=features.columns, fill_value=0)
+    # features_train = ct.fit_transform(features_train)
+    # features_test = ct.transform(features_test)
 
-compounds = [
-    ("SOFT", compound1_df),
-    ("MEDIUM", compound2_df),
-    ("HARD", compound3_df)
-]
+    reg = RandomForestRegressor(n_estimators=100, random_state=42)
+    reg.fit(features_train, labels_train)
+
+    print("R^2 score:", reg.score(features_test, labels_test))
+
+    from sklearn.metrics import mean_absolute_error, mean_squared_error
+    preds = reg.predict(features_test)
+    print("MAE:", mean_absolute_error(labels_test, preds))
+    print("MSE:", mean_squared_error(labels_test, preds))
+    print(multi_year_laps["TrackStatus"].value_counts())
+
+    # plt.scatter(labels_test, labels_test - preds, alpha=0.5)
+    # plt.axhline(0, color='red', linestyle='--')
+    # plt.xlabel("Actual Lap Time (s)")
+    # plt.ylabel("Residual (Actual - Predicted)")
+    # plt.title("Residuals vs Actual Lap Time")
+    # plt.show()
 
 
-
-stint1_time = reg.predict(compound1_df)
-stint1_total_time = stint1_time.sum()
-print("Stint 1 Total Time (SOFT):", stint1_total_time)
-stint2_time = reg.predict(compound2_df)
-stint2_total_time = stint2_time.sum()
-print("Stint 2 Total Time (MEDIUM):", stint2_total_time)
-stint3_time = reg.predict(compound3_df)
-stint3_total_time = stint3_time.sum()
-print("Stint 3 Total Time (HARD):", stint3_total_time)
-pit_stop_constant = 23.0
+    return reg, features.columns, multi_year_laps, session, avg_delta_soft, avg_delta_medium, avg_delta_hard
 
 
-best_strategy = 0
-best_time = float('inf')
-best_compound1 = None
-best_compound2 = None
+def predict_strategy(reg, feature_columns, multi_year_laps, session, avg_delta_soft, avg_delta_medium, avg_delta_hard):
+    total_laps = int(session.laps['LapNumber'].max())
 
-# F1 Teams never pit before lap 10 at the earliest
-for (name1, compound1_df), (name2, compound2_df) in permutations(compounds, 2):
-    for pit_lap in range(10, total_laps - 10):
-        stint1_time = reg.predict(compound1_df.iloc[:pit_lap])
-        stint2_time = reg.predict(compound2_df.iloc[pit_lap:])
+    data_compound1 = {
+        "LapNumber": list(range(0, total_laps)),
+        "Stint": 1,
+        "Compound": ["SOFT"] * total_laps,
+        "TyreLife": list(range(1, total_laps + 1)),
+        "FreshTyre": [True] + [False] * (total_laps - 1),
+        "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
+        "TrackStatus": [1] * total_laps,
+        "LapDelta": [avg_delta_soft] * total_laps
+    }
 
-        stint1_total_time = stint1_time.sum()
-        stint2_total_time = stint2_time.sum()
-        total_time = stint1_total_time + stint2_total_time + pit_stop_constant
+    data_compound2 = {
+        "LapNumber": list(range(0, total_laps)),
+        "Stint": 1,
+        "Compound": ["MEDIUM"] * total_laps,
+        "TyreLife": list(range(1, total_laps + 1)),
+        "FreshTyre": [True] + [False] * (total_laps - 1),
+        "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
+        "TrackStatus": [1] * total_laps,
+        "LapDelta": [avg_delta_medium] * total_laps
+    }
 
-        if total_time < best_time:
-            best_time = total_time
-            best_strategy = pit_lap
-            best_compound1 = name1
-            best_compound2 = name2
+    data_compound3 = {
+        "LapNumber": list(range(0, total_laps)),
+        "Stint": 1,
+        "Compound": ["HARD"] * total_laps,
+        "TyreLife": list(range(1, total_laps + 1)),
+        "FreshTyre": [True] + [False] * (total_laps - 1),
+        "SpeedFL": [multi_year_laps["SpeedFL"].mean()] * total_laps,
+        "TrackStatus": [1] * total_laps,
+        "LapDelta": [avg_delta_hard] * total_laps
+    }
 
-print(f"Best strategy: Pit on lap {best_strategy}, {best_compound1} → {best_compound2}")
-print(f"Predicted total race time: {convert(best_time)}")
+    # Create DataFrames for each compound
+    compound1_df = pd.DataFrame(data_compound1)
+    compound2_df = pd.DataFrame(data_compound2)
+    compound3_df = pd.DataFrame(data_compound3)
+
+    # One-hot encoding for the new DataFrames
+    compound1_df = pd.get_dummies(compound1_df, columns=["Compound", "TrackStatus"])
+    compound2_df = pd.get_dummies(compound2_df, columns=["Compound", "TrackStatus"])
+    compound3_df = pd.get_dummies(compound3_df, columns=["Compound", "TrackStatus"])
+
+    # Reindex the new DataFrames to ensure they have the same columns as the training features, filling missing columns with zeros
+    # (MEDIUM and HARD will have 0s in the SOFT columns, etc.)
+    compound1_df = compound1_df.reindex(columns=feature_columns, fill_value=0)
+    compound2_df = compound2_df.reindex(columns=feature_columns, fill_value=0)
+    compound3_df = compound3_df.reindex(columns=feature_columns, fill_value=0)
+
+    compounds = [
+        ("SOFT", compound1_df),
+        ("MEDIUM", compound2_df),
+        ("HARD", compound3_df)
+    ]
 
 
 
+    stint1_time = reg.predict(compound1_df)
+    stint1_total_time = stint1_time.sum()
+    print("Stint 1 Total Time (SOFT):", stint1_total_time)
+    stint2_time = reg.predict(compound2_df)
+    stint2_total_time = stint2_time.sum()
+    print("Stint 2 Total Time (MEDIUM):", stint2_total_time)
+    stint3_time = reg.predict(compound3_df)
+    stint3_total_time = stint3_time.sum()
+    print("Stint 3 Total Time (HARD):", stint3_total_time)
+    pit_stop_constant = 23.0
+
+
+    best_strategy = 0
+    best_time = float('inf')
+    best_compound1 = None
+    best_compound2 = None
+
+    # F1 Teams never pit before lap 10 at the earliest
+    for (name1, compound1_df), (name2, compound2_df) in permutations(compounds, 2):
+        for pit_lap in range(10, total_laps - 10):
+            stint1_time = reg.predict(compound1_df.iloc[:pit_lap])
+            stint2_time = reg.predict(compound2_df.iloc[pit_lap:])
+
+            stint1_total_time = stint1_time.sum()
+            stint2_total_time = stint2_time.sum()
+            total_time = stint1_total_time + stint2_total_time + pit_stop_constant
+
+            if total_time < best_time:
+                best_time = total_time
+                best_strategy = pit_lap
+                best_compound1 = name1
+                best_compound2 = name2
+
+    print(f"Best strategy: Pit on lap {best_strategy}, {best_compound1} → {best_compound2}")
+    print(f"Predicted total race time: {convert(best_time)}")
+
+    return best_strategy, best_compound1, best_compound2, best_time
+
+if __name__ == "__main__":
+    reg, feature_cols, laps, session, d_soft, d_med, d_hard = train_model('VER', 'Silverstone', [2022, 2023, 2024])
+    predict_strategy(reg, feature_cols, laps, session, d_soft, d_med, d_hard)
