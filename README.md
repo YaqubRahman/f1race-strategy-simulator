@@ -13,10 +13,10 @@ A machine learning powered tool that predicts the optimal pit stop strategy for 
 
 ## Tech stack
 
-- **Frontend** — React, TypeScript, Tailwind CSS, Vite
-- **Backend** — Python, Flask
-- **ML** — scikit-learn (Random Forest Regressor)
-- **Data** — FastF1, pandas
+- **Frontend** - React, TypeScript, Tailwind CSS, Vite
+- **Backend** - Python, Flask
+- **ML** - scikit-learn (Random Forest Regressor)
+- **Data** - FastF1, pandas
 
 ## Getting started
 
